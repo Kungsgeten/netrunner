@@ -1,35 +1,44 @@
-;;; steam.el --- Organize and launch Steam games
+;;; netrunner.el --- Create Android: Netrunner decklists using Company, Helm and org-mode
 
-;; Copyright (C) 2015-- Erik Sjöstrand
+;; Copyright (C) 2016-- Erik Sjöstrand
 ;; MIT License
 
 ;; Author: Erik Sjöstrand
-;; URL: http://github.com/Kungsgeten/steam.el
+;; URL: http://github.com/Kungsgeten/netrunner.el
 ;; Version: 1.00
 ;; Keywords: games
-;; Package-Requires: ((cl-lib "0.5") (emacs "25.0") (popup "0.5.3") (company "0.9.0")   )
+;; Package-Requires: ((cl-lib "0.5") (emacs "25.0") (popup "0.5.3") (company "0.9.0") (helm "1.9.5"))
 
 ;;; Commentary:
 
-;; Launch games in your Steam library from Emacs.  First set your `steam-username':
-;;
-;; (setq steam-username "your_username")
-;;
-;; Then use `steam-launch' to play a game! You can also insert your steam
-;; library into an org-mode file, in order to organize your games, and launch
-;; them from there.  Run either `steam-insert-org-text' or
-;; `steam-insert-org-images' (if you want the logotypes for the games in your
-;; org file). The logotypes will be saved locally (see variable `steam-logo-dir'
-;; into a folder relative to the org-file.
+;; netrunner.el fetches data from NetrunnerDB.com, making it easy to create
+;; Android: Netrunner decklists in Emacs (like any hacker should). This package
+;; adds a backend for Company mode, adds "card info" links into org-mode, and
+;; allows searching for cards with Helm.
+;; 
+;; In an org-mode buffer, run `netrunner-toggle-netrunner-buffer' (or add
+;; "# -*- netrunner-buffer: t; -*-" to the top of the buffer). Now the company
+;; backend should work for completing card names. You could also use
+;; `helm-netrunner' to list cards.
+;; 
+;; If you to wish to preview card images in Helm, the images has to be
+;; downloaded locally.  The images will be placed in `netrunner-image-dir' (a
+;; directory called netrunner-images inside your `user-emacs-directory' by
+;; default). Use `netrunner-download-all-images' to download images.
 
 ;;; Code:
 
+(eval-when-compile
+  (defvar url-http-codes)
+  (defvar url-http-end-of-headers))
 
+(require 'url)
 (require 'json)
 (require 'popup)
 (require 'cl-lib)
 (require 'company)
 (require 'subr-x)
+(require 'helm)
 
 
 ;; JSON
@@ -43,12 +52,15 @@ An example for TAIL is \"cards/\" in order to get all cards."
     (goto-char url-http-end-of-headers)
     (json-read)))
 
-(defvar netrunner-cards (netrunner-api-get "cards/"))
+(defvar netrunner-cards (netrunner-api-get "cards/")
+  "A list of all Netrunner cards and their json data.")
 
 (defun netrunner-card-get-value (card property)
+  "From Netrunner CARD json data, get PROPERTY."
   (cdr (assoc property card)))
 
 (defun netrunner-card-property-p (card property value)
+  "Do the CARD PROPERTY match VALUE?"
   (equal (netrunner-card-get-value card property) value))
 
 (defun netrunner-filter (list &rest keyvalues)
@@ -165,6 +177,7 @@ If OMIT-TITLE, then do not include title in result string."
 (defvar netrunner-buffer nil
   "If non nil, this buffer can use `company-netrunner-backend'.")
 (make-variable-buffer-local 'netrunner-buffer)
+(put 'netrunner-buffer 'safe-local-variable #'booleanp)
 
 ;;;###autoload
 (defun netrunner-toggle-netrunner-buffer ()
@@ -207,6 +220,54 @@ If OMIT-TITLE, then do not include title in result string."
       t t))))
 
 (add-to-list 'company-backends 'company-netrunner-backend)
+
+
+;; Download images
+(defvar netrunner-image-dir (expand-file-name "netrunner_images" user-emacs-directory))
+
+(defun netrunner-download-all-images ()
+  "Try to download images from all cards from NetrunnerDB into `netrunner-image-dir'."
+  (interactive)
+  (unless (file-exists-p netrunner-image-dir)
+    (make-directory netrunner-image-dir))
+  (mapc #'netrunner-download-image netrunner-cards))
+
+(defun netrunner-download-image (card)
+  "Download CARD image into `netrunner-image-dir' from NetrunnerDB."
+  (let ((link (concat "http://netrunnerdb.com" (netrunner-card-get-value card 'imagesrc)))
+        (filename (concat netrunner-image-dir "/img" (netrunner-card-get-value card 'code) ".png")))
+    (unless (file-exists-p filename)
+      (url-retrieve
+       link
+       (lambda (status filename buffer)
+         ;; Write current buffer to FILENAME
+         ;; and update inline images in BUFFER
+         (let ((err (plist-get status :error)))
+           (if err (error
+                    "\"%s\" %s" link
+                    (downcase (nth 2 (assq (nth 2 err) url-http-codes))))))
+         (delete-region
+          (point-min)
+          (progn
+            (re-search-forward "\n\n" nil 'move)
+            (point)))
+         (let ((coding-system-for-write 'no-conversion))
+           (write-region nil nil filename nil nil nil nil)))
+       (list
+        (expand-file-name filename)
+        (current-buffer))
+       nil t)
+      (sleep-for 0 100))
+    filename))
+
+(defun netrunner-image (card)
+  "Return an image of CARD if its in `netrunner-image-dir', else nil."
+  (let ((filename (expand-file-name
+                   (concat "img" (netrunner-card-get-value card 'code) ".png")
+                   netrunner-image-dir)))
+    (if (file-exists-p filename)
+        (create-image filename)
+      nil)))
 
 
 ;; Helm stuff
@@ -294,8 +355,12 @@ If OMIT-TITLE, then do not include title in result string."
   (switch-to-buffer (get-buffer-create " *helm-netrunner persistent*"))
   (fundamental-mode)
   (erase-buffer)
+  (when-let (image (netrunner-image cand))
+    (insert-image image)
+    (insert "\n\n"))
   (insert
-   (netrunner-parse cand t)))
+   (netrunner-parse cand t))
+  (beginning-of-buffer))
 
 (defun helm-source--netrunner (name cards)
   "Create a helm source NAME with Android: Netrunner CARDS."
@@ -351,8 +416,8 @@ If OMIT-TITLE, then do not include title in result string."
                                                          '(faction . "Sunny Lebeau")))
               ,(helm-source--netrunner "Adam"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Adam")))              )
-   :buffer "*helm netrunnter*"))
+                                                         '(faction . "Adam"))))
+   :buffer "*helm netrunner*"))
 
 ;;;###autoload
 (defun helm-netrunner-corp ()
@@ -375,7 +440,7 @@ If OMIT-TITLE, then do not include title in result string."
               ,(helm-source--netrunner "Weyland Consortium"
                                        (netrunner-filter netrunner-cards
                                                          '(faction . "Weyland Consortium"))))
-   :buffer "*helm netrunnter*"))
+   :buffer "*helm netrunner*"))
 
 ;;;###autoload
 (defun helm-netrunner-runner ()
@@ -404,43 +469,6 @@ If OMIT-TITLE, then do not include title in result string."
               ,(helm-source--netrunner "Adam"
                                        (netrunner-filter netrunner-cards
                                                          '(faction . "Adam"))))
-   :buffer "*helm netrunnter*"))
-
-;; Download images
-(defvar netrunner-image-dir (expand-file-name "netrunner_images" user-emacs-directory))
-
-(defun netrunner-download-all-images ()
-  "Try to download images from all cards from NetrunnerDB into `netrunner-image-dir'."
-  (unless (file-exists-p netrunner-image-dir)
-    (make-directory netrunner-image-dir))
-  (mapc #'netrunner-download-image netrunner-cards))
-
-(defun netrunner-download-image (card)
-  "Download CARD image into `netrunner-image-dir' from NetrunnerDB."
-  (let ((link (concat "http://netrunnerdb.com" (netrunner-card-get-value card 'imagesrc)))
-        (filename (concat netrunner-image-dir "/img" (netrunner-card-get-value card 'code) ".png")))
-    (unless (file-exists-p filename)
-      (url-retrieve
-       link
-       (lambda (status filename buffer)
-         ;; Write current buffer to FILENAME
-         ;; and update inline images in BUFFER
-         (let ((err (plist-get status :error)))
-           (if err (error
-                    "\"%s\" %s" link
-                    (downcase (nth 2 (assq (nth 2 err) url-http-codes))))))
-         (delete-region
-          (point-min)
-          (progn
-            (re-search-forward "\n\n" nil 'move)
-            (point)))
-         (let ((coding-system-for-write 'no-conversion))
-           (write-region nil nil filename nil nil nil nil)))
-       (list
-        (expand-file-name filename)
-        (current-buffer))
-       nil t)
-      (sleep-for 0 100))
-    filename))
+   :buffer "*helm netrunner*"))
 
 (provide 'netrunner)
