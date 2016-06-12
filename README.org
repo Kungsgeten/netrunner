@@ -2,8 +2,8 @@
 
 [[file:netrunnerel_screenshot.jpg]]
 
-netrunner.el fetches data from NetrunnerDB.com, making it easy to create
-Android: Netrunner decklists in Emacs (like any hacker should). This package
+/netrunner.el/ fetches data from [[https://netrunnerdb.com/][NetrunnerDB.com]], making it easy to create
+[[https://www.fantasyflightgames.com/en/products/android-netrunner-the-card-game/][Android: Netrunner]] decklists in Emacs (like any hacker should). This package
 adds a backend for [[http://company-mode.github.io/][Company mode]], adds "card info" links into [[http://orgmode.org/][org-mode]], and
 allows searching for cards with [[https://github.com/emacs-helm/helm][Helm]].
 
