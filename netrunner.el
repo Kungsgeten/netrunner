@@ -7,7 +7,7 @@
 ;; URL: http://github.com/Kungsgeten/netrunner.el
 ;; Version: 1.00
 ;; Keywords: games
-;; Package-Requires: ((cl-lib "0.5") (emacs "25.0") (popup "0.5.3") (company "0.9.0") (helm "1.9.5"))
+;; Package-Requires: ((emacs "25.0") (popup "0.5.3") (company "0.9.0") (helm "1.9.5"))
 
 ;;; Commentary:
 
