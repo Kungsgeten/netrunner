@@ -7,7 +7,7 @@
 ;; URL: http://github.com/Kungsgeten/netrunner
 ;; Version: 1.00
 ;; Keywords: games
-;; Package-Requires: ((cl-lib "0.5") (emacs "25.0") (popup "0.5.3") (company "0.9.0") (helm "1.9.5"))
+;; Package-Requires: ((emacs "25.0") (popup "0.5.3") (company "0.9.0") (helm "1.9.5"))
 
 ;;; Commentary:
 
@@ -331,25 +331,25 @@ If OMIT-TITLE, then do not include title in result string."
 
 (defun helm-netrunner--candidates-card-list (ignored)
   "Inserts an org-mode list of Helm card candidates."
-  (loop for cand in (helm-marked-candidates)
-        do 
-        (insert (format "- [[netrunner:%s][%s]]\n"
-                        (netrunner-card-get-value cand 'code)
-                        (netrunner-card-get-value cand 'title)))))
+  (cl-loop for cand in (helm-marked-candidates)
+           do
+           (insert (format "- [[netrunner:%s][%s]]\n"
+                           (netrunner-card-get-value cand 'code)
+                           (netrunner-card-get-value cand 'title)))))
 
 (defun helm-netrunner--candidates-netrunnerdb (ignored)
   "Browse NetrunnerDB for Helm card candidates."
-  (loop for cand in (helm-marked-candidates)
-        do
-        (browse-url
-         (netrunner-card-get-value cand 'url))))
+  (cl-loop for cand in (helm-marked-candidates)
+           do
+           (browse-url
+            (netrunner-card-get-value cand 'url))))
 
 (defun helm-netrunner--candidates-ancur (ignored)
   "Browse Ancur for Helm card candidates."
-  (loop for cand in (helm-marked-candidates)
-        do
-        (browse-url
-         (netrunner-card-get-value cand 'ancur_link))))
+  (cl-loop for cand in (helm-marked-candidates)
+           do
+           (browse-url
+            (netrunner-card-get-value cand 'ancur_link))))
 
 (defun helm-netrunner--persistent-action (cand)
   "Show Netrunner card text in separate buffer."
@@ -473,3 +473,4 @@ If OMIT-TITLE, then do not include title in result string."
    :buffer "*helm netrunner*"))
 
 (provide 'netrunner)
+;;; netrunner.el ends here
