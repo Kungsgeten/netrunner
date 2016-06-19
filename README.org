@@ -1,4 +1,4 @@
-#+TITLE:Netrunner.el
+#+TITLE:Netrunner.el [[http://melpa.org/#/netrunner][file:http://melpa.org/packages/netrunner-badge.svg]]
 
 [[file:netrunnerel_screenshot.jpg]]
 

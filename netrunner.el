@@ -4,7 +4,7 @@
 ;; MIT License
 
 ;; Author: Erik Sjöstrand
-;; URL: http://github.com/Kungsgeten/netrunner.el
+;; URL: http://github.com/Kungsgeten/netrunner
 ;; Version: 1.00
 ;; Keywords: games
 ;; Package-Requires: ((cl-lib "0.5") (emacs "25.0") (popup "0.5.3") (company "0.9.0") (helm "1.9.5"))
@@ -225,6 +225,7 @@ If OMIT-TITLE, then do not include title in result string."
 ;; Download images
 (defvar netrunner-image-dir (expand-file-name "netrunner_images" user-emacs-directory))
 
+;;;###autoload
 (defun netrunner-download-all-images ()
   "Try to download images from all cards from NetrunnerDB into `netrunner-image-dir'."
   (interactive)
