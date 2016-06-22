@@ -7,7 +7,7 @@
 ;; URL: http://github.com/Kungsgeten/netrunner
 ;; Version: 1.00
 ;; Keywords: games
-;; Package-Requires: ((emacs "25.0") (popup "0.5.3") (company "0.9.0") (helm "1.9.5"))
+;; Package-Requires: ((popup "0.5.3") (company "0.9.0") (helm "1.9.5"))
 
 ;;; Commentary:
 
@@ -37,7 +37,6 @@
 (require 'popup)
 (require 'cl-lib)
 (require 'company)
-(require 'subr-x)
 (require 'helm)
 
 
@@ -65,7 +64,7 @@ An example for TAIL is \"cards/\" in order to get all cards."
 
 (defun netrunner-filter (list &rest keyvalues)
   "Take LIST and only return entries which match KEYVALUES.
-KEYVALUES are tuples with a keyword and a value." 
+KEYVALUES are tuples with a keyword and a value."
   (dolist (kv keyvalues)
     (setq list
           (cl-remove-if-not
@@ -75,14 +74,13 @@ KEYVALUES are tuples with a keyword and a value."
   list)
 
 (defun netrunner-filter-first (list &rest keyvalues)
-  "Runs `netrunner-filter' but only returns first match."
+  "Run `netrunner-filter' but only return first match."
   (elt (apply 'netrunner-filter list keyvalues) 0))
-
 
 ;; Parsing
 
 (defun netrunner-parse (card &optional omit-title)
-  "Parse CARD data into an org-mode string.
+  "Parse CARD data into an `org-mode' string.
 If OMIT-TITLE, then do not include title in result string."
   (if (netrunner-card-property-p card 'type "Identity")
       (if (netrunner-card-property-p card 'side "Corp")
@@ -91,7 +89,7 @@ If OMIT-TITLE, then do not include title in result string."
     (netrunner-parse-generic card omit-title)))
 
 (defun netrunner-substitute-string (string)
-  "Replaces characters in STRING from NetrunnerDB to org-mode syntax."
+  "Replace characters in STRING from NetrunnerDB to `org-mode' syntax."
   (setq string (replace-regexp-in-string "</?strong>" "*" string))
   (setq string (replace-regexp-in-string "\\\[Subroutine\\\]" "↳" string))
   (setq string (replace-regexp-in-string "\\\[Click\\\]" "*Click*" string))
@@ -108,8 +106,9 @@ If OMIT-TITLE, then do not include title in result string."
           (netrunner-card-get-value card 'subtype)
           (netrunner-card-get-value card 'minimumdecksize)
           (or (netrunner-card-get-value card 'influencelimit) "∞")
-          (if-let (text (netrunner-card-get-value card 'text)) 
-              (format "\n\n%s" (netrunner-substitute-string text)) "") 
+          (let ((text (netrunner-card-get-value card 'text)))
+            (if text
+                (format "\n\n%s" (netrunner-substitute-string text)) "")) 
           (netrunner-card-get-value card 'faction)
           (netrunner-card-get-value card 'setname)))
 
@@ -124,8 +123,9 @@ If OMIT-TITLE, then do not include title in result string."
           (netrunner-card-get-value card 'minimumdecksize)
           (or (netrunner-card-get-value card 'influencelimit) "∞")
           (netrunner-card-get-value card 'baselink)
-          (if-let (text (netrunner-card-get-value card 'text)) 
-              (format "\n\n%s" (netrunner-substitute-string text)) "")
+          (let ((text (netrunner-card-get-value card 'text)))
+            (if text
+                (format "\n\n%s" (netrunner-substitute-string text)) ""))
           (netrunner-card-get-value card 'faction)
           (netrunner-card-get-value card 'setname)))
 
@@ -141,21 +141,27 @@ If OMIT-TITLE, then do not include title in result string."
             (if (and subtype (> (length subtype) 0))
                 (format ": %s" subtype)
               ""))
-          (if-let (cost (netrunner-card-get-value card 'cost)) 
-              (format " • %s$" cost) "")
-          (if-let (agendapoints (netrunner-card-get-value card 'agendapoints)) 
-              (format " • %s/%s"
-                      (netrunner-card-get-value card 'advancementcost)
-                      agendapoints)
-            "")
-          (if-let (trash (netrunner-card-get-value card 'trash)) 
-              (format " %sT" trash) "")
-          (if-let ((mu (netrunner-card-get-value card 'memoryunits))) 
-              (format " %sMU" mu) "") 
-          (if-let ((strength (netrunner-card-get-value card 'strength))) 
-              (format "\n\n*Strength*: %s" strength) "")
-          (if-let (text (netrunner-card-get-value card 'text)) 
-              (format "\n\n%s" (netrunner-substitute-string text)) "")
+          (let ((cost (netrunner-card-get-value card 'cost)))
+            (if cost
+                (format " • %s$" cost) ""))
+          (let ((agendapoints (netrunner-card-get-value card 'agendapoints)))
+            (if agendapoints
+                (format " • %s/%s"
+                        (netrunner-card-get-value card 'advancementcost)
+                        agendapoints)
+              ""))
+          (let ((trash (netrunner-card-get-value card 'trash)))
+            (if trash
+                (format " %sT" trash) ""))
+          (let ((mu (netrunner-card-get-value card 'memoryunits)))
+            (if mu
+                (format " %sMU" mu) "")) 
+          (let ((strength (netrunner-card-get-value card 'strength)))
+            (if strength
+                (format "\n\n*Strength*: %s" strength) ""))
+          (let ((text (netrunner-card-get-value card 'text)))
+            (if text
+                (format "\n\n%s" (netrunner-substitute-string text)) ""))
           (let ((factioncost (netrunner-card-get-value card 'factioncost)))
             (if (and factioncost (> factioncost 0))
                 (concat (make-string (netrunner-card-get-value card 'factioncost) ?•) " ")
@@ -181,7 +187,7 @@ If OMIT-TITLE, then do not include title in result string."
 
 ;;;###autoload
 (defun netrunner-toggle-netrunner-buffer ()
-  "Toggles if this is a `netrunner-buffer' or not."
+  "Toggle if this is a `netrunner-buffer' or not."
   (interactive)
   (setq netrunner-buffer (not netrunner-buffer))
   (message (if netrunner-buffer
@@ -277,10 +283,11 @@ If OMIT-TITLE, then do not include title in result string."
   "Parse CARD into a string suitable for helm-netrunner."
   (let ((title (netrunner-card-get-value card 'title))
         (text (concat
-               (if-let (text (netrunner-card-get-value card 'text)) 
-                   (replace-regexp-in-string
-                    "\n" "/" (netrunner-substitute-string text))
-                 "")))
+               (let ((text (netrunner-card-get-value card 'text)))
+                 (if text
+                     (replace-regexp-in-string
+                      "\n" "/" (netrunner-substitute-string text))
+                   ""))))
         (faction (concat
                   " "
                   (netrunner-card-get-value card 'faction)
@@ -295,27 +302,34 @@ If OMIT-TITLE, then do not include title in result string."
                      (format ": %s" subtype)
                    ""))))
         (values (concat
-                 (if-let (decksize (netrunner-card-get-value card 'minimumdecksize))
-                     (format "%s/%s"
-                             decksize 
-                             (or (netrunner-card-get-value card 'influencelimit) "∞"))
-                   "")
-                 (if-let (link (netrunner-card-get-value card 'baselink))
-                     (format " %sL" link)
-                   "")
-                 (if-let (agendapoints (netrunner-card-get-value card 'agendapoints)) 
-                     (format "%s/%s"
-                             (netrunner-card-get-value card 'advancementcost)
-                             agendapoints)
-                   "")
-                 (if-let (cost (netrunner-card-get-value card 'cost)) 
-                     (format "%s$" cost) "")               
-                 (if-let (trash (netrunner-card-get-value card 'trash)) 
-                     (format " %sT" trash) "")
-                 (if-let ((mu (netrunner-card-get-value card 'memoryunits))) 
-                     (format " %sMU" mu) "")               
-                 (if-let ((strength (netrunner-card-get-value card 'strength))) 
-                     (format " Str: %s" strength) ""))))
+                 (let ((decksize (netrunner-card-get-value card 'minimumdecksize)))
+                   (if decksize
+                       (format "%s/%s"
+                               decksize 
+                               (or (netrunner-card-get-value card 'influencelimit) "∞"))
+                     ""))
+                 (let ((link (netrunner-card-get-value card 'baselink)))
+                   (if link
+                       (format " %sL" link)
+                     ""))
+                 (let ((agendapoints (netrunner-card-get-value card 'agendapoints)))
+                   (if agendapoints
+                       (format "%s/%s"
+                               (netrunner-card-get-value card 'advancementcost)
+                               agendapoints)
+                     ""))
+                 (let ((cost (netrunner-card-get-value card 'cost)))
+                   (if cost
+                       (format "%s$" cost) ""))               
+                 (let ((trash (netrunner-card-get-value card 'trash)))
+                   (if trash
+                       (format " %sT" trash) ""))
+                 (let ((mu (netrunner-card-get-value card 'memoryunits)))
+                   (if mu
+                       (format " %sMU" mu) ""))               
+                 (let ((strength (netrunner-card-get-value card 'strength)))
+                   (if strength
+                       (format " Str: %s" strength) "")))))
     (add-text-properties 0 (length title) '(face default) title)
     (add-text-properties 0 (length values) '(face shadow) values)
     (add-text-properties 0 (length type) '(face (bold shadow)) type)
@@ -326,11 +340,11 @@ If OMIT-TITLE, then do not include title in result string."
           card)))
 
 (defun helm-netrunner--parse-candidates (cards)
-  "Turns CARDS to a list of helm-netrunner candidate strings."
+  "Turn CARDS to a list of helm-netrunner candidate strings."
   (mapcar #'helm-netrunner--parse-candidate cards))
 
 (defun helm-netrunner--candidates-card-list (ignored)
-  "Inserts an org-mode list of Helm card candidates."
+  "Insert an `org-mode' list of Helm card candidates."
   (cl-loop for cand in (helm-marked-candidates)
            do
            (insert (format "- [[netrunner:%s][%s]]\n"
@@ -356,9 +370,10 @@ If OMIT-TITLE, then do not include title in result string."
   (switch-to-buffer (get-buffer-create " *helm-netrunner persistent*"))
   (fundamental-mode)
   (erase-buffer)
-  (when-let (image (netrunner-image cand))
-    (insert-image image)
-    (insert "\n\n"))
+  (let ((image (netrunner-image cand)))
+    (when image
+      (insert-image image)
+      (insert "\n\n")))
   (insert
    (netrunner-parse cand t))
   (beginning-of-buffer))
