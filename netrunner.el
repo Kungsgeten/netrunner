@@ -15,18 +15,20 @@
 ;; Android: Netrunner decklists in Emacs (like any hacker should). This package
 ;; adds a backend for Company mode, adds "card info" links into org-mode, and
 ;; allows searching for cards with Helm.
-;; 
+;;
 ;; In an org-mode buffer, run `netrunner-toggle-netrunner-buffer' (or add
 ;; "# -*- netrunner-buffer: t; -*-" to the top of the buffer). Now the company
 ;; backend should work for completing card names. You could also use
 ;; `helm-netrunner' to list cards.
-;; 
+;;
 ;; If you to wish to preview card images in Helm, the images has to be
 ;; downloaded locally.  The images will be placed in `netrunner-image-dir' (a
 ;; directory called netrunner-images inside your `user-emacs-directory' by
 ;; default). Use `netrunner-download-all-images' to download images.
 
 ;;; Code:
+
+;; This could should not be here
 
 (eval-when-compile
   (defvar url-http-codes)
@@ -46,12 +48,12 @@
   "Get json data from NetrunnerDB API, with TAIL as argument.
 An example for TAIL is \"cards/\" in order to get all cards."
   (with-current-buffer
-      (url-retrieve-synchronously (format "http://netrunnerdb.com/api/%s"
+      (url-retrieve-synchronously (format "https://netrunnerdb.com/api/2.0/public/%s"
                                           tail))
     (goto-char url-http-end-of-headers)
-    (json-read)))
+    (cdr (assoc 'data (json-read)))))
 
-(defvar netrunner-cards (netrunner-api-get "cards/")
+(defvar netrunner-cards (netrunner-api-get "cards")
   "A list of all Netrunner cards and their json data.")
 
 (defun netrunner-card-get-value (card property)
@@ -82,10 +84,10 @@ KEYVALUES are tuples with a keyword and a value."
 (defun netrunner-parse (card &optional omit-title)
   "Parse CARD data into an `org-mode' string.
 If OMIT-TITLE, then do not include title in result string."
-  (if (netrunner-card-property-p card 'type "Identity")
-      (if (netrunner-card-property-p card 'side "Corp")
+  (if (netrunner-card-property-p card 'type_code "identity")
+      (if (netrunner-card-property-p card 'side_code "corp")
           (netrunner-parse-corp-identity card omit-title)
-        (netrunner-parse-runner-identity card omit-title)) 
+        (netrunner-parse-runner-identity card omit-title))
     (netrunner-parse-generic card omit-title)))
 
 (defun netrunner-substitute-string (string)
@@ -94,7 +96,9 @@ If OMIT-TITLE, then do not include title in result string."
   (setq string (replace-regexp-in-string "\\\[Subroutine\\\]" "↳" string))
   (setq string (replace-regexp-in-string "\\\[Click\\\]" "*Click*" string))
   (setq string (replace-regexp-in-string "\\\[Recurring Credits\\\]" "↶$" string))
-  (setq string (replace-regexp-in-string "\\\[Credits\\\]" "$" string)))
+  (setq string (replace-regexp-in-string "\\\[recurring-credit\\\]" "↶$" string))
+  (setq string (replace-regexp-in-string "\\\[Credits\\\]" "$" string))
+  (setq string (replace-regexp-in-string "\\\[credit\\\]" "$" string)))
 
 (defun netrunner-parse-corp-identity (card &optional omit-title)
   "Parse CARD, which is a corp identity.
@@ -102,15 +106,15 @@ If OMIT-TITLE, then do not include title in result string."
   (format "%sIdentity: %s - %s/%s%s\n\n%s - %s"
           (if omit-title
               ""
-            (format "%s\n" (netrunner-card-get-value card 'title))) 
-          (netrunner-card-get-value card 'subtype)
-          (netrunner-card-get-value card 'minimumdecksize)
-          (or (netrunner-card-get-value card 'influencelimit) "∞")
+            (format "%s\n" (netrunner-card-get-value card 'title)))
+          (netrunner-card-get-value card 'keywords)
+          (netrunner-card-get-value card 'minimum_deck_size)
+          (or (netrunner-card-get-value card 'influence_limit) "∞")
           (let ((text (netrunner-card-get-value card 'text)))
             (if text
-                (format "\n\n%s" (netrunner-substitute-string text)) "")) 
-          (netrunner-card-get-value card 'faction)
-          (netrunner-card-get-value card 'setname)))
+                (format "\n\n%s" (netrunner-substitute-string text)) ""))
+          (netrunner-card-get-value card 'faction_code)
+          (netrunner-card-get-value card 'pack_code)))
 
 (defun netrunner-parse-runner-identity (card &optional omit-title)
   "Parse CARD, which is a runner identity.
@@ -118,16 +122,16 @@ If OMIT-TITLE, then do not include title in result string."
   (format "%sIdentity: %s - %s/%s - %sL%s\n\n%s - %s"
           (if omit-title
               ""
-            (format "%s\n" (netrunner-card-get-value card 'title))) 
-          (netrunner-card-get-value card 'subtype)
-          (netrunner-card-get-value card 'minimumdecksize)
-          (or (netrunner-card-get-value card 'influencelimit) "∞")
-          (netrunner-card-get-value card 'baselink)
+            (format "%s\n" (netrunner-card-get-value card 'title)))
+          (netrunner-card-get-value card 'keywords)
+          (netrunner-card-get-value card 'minimum_deck_size)
+          (or (netrunner-card-get-value card 'influence_limit) "∞")
+          (netrunner-card-get-value card 'base_link)
           (let ((text (netrunner-card-get-value card 'text)))
             (if text
                 (format "\n\n%s" (netrunner-substitute-string text)) ""))
-          (netrunner-card-get-value card 'faction)
-          (netrunner-card-get-value card 'setname)))
+          (netrunner-card-get-value card 'faction_code)
+          (netrunner-card-get-value card 'pack_code)))
 
 (defun netrunner-parse-generic (card &optional omit-title)
   "Parse CARD, which isn't an identity.
@@ -136,38 +140,38 @@ If OMIT-TITLE, then do not include title in result string."
           (if omit-title
               ""
             (format "%s\n" (netrunner-card-get-value card 'title)))
-          (netrunner-card-get-value card 'type)
-          (let ((subtype (netrunner-card-get-value card 'subtype)))
+          (netrunner-card-get-value card 'type-code)
+          (let ((subtype (netrunner-card-get-value card 'keywords)))
             (if (and subtype (> (length subtype) 0))
                 (format ": %s" subtype)
               ""))
           (let ((cost (netrunner-card-get-value card 'cost)))
             (if cost
                 (format " • %s$" cost) ""))
-          (let ((agendapoints (netrunner-card-get-value card 'agendapoints)))
+          (let ((agendapoints (netrunner-card-get-value card 'agenda_points)))
             (if agendapoints
                 (format " • %s/%s"
-                        (netrunner-card-get-value card 'advancementcost)
+                        (netrunner-card-get-value card 'advancement_cost)
                         agendapoints)
               ""))
-          (let ((trash (netrunner-card-get-value card 'trash)))
+          (let ((trash (netrunner-card-get-value card 'trash_cost)))
             (if trash
                 (format " %sT" trash) ""))
-          (let ((mu (netrunner-card-get-value card 'memoryunits)))
+          (let ((mu (netrunner-card-get-value card 'memory_cost)))
             (if mu
-                (format " %sMU" mu) "")) 
+                (format " %sMU" mu) ""))
           (let ((strength (netrunner-card-get-value card 'strength)))
             (if strength
                 (format "\n\n*Strength*: %s" strength) ""))
           (let ((text (netrunner-card-get-value card 'text)))
             (if text
                 (format "\n\n%s" (netrunner-substitute-string text)) ""))
-          (let ((factioncost (netrunner-card-get-value card 'factioncost)))
+          (let ((factioncost (netrunner-card-get-value card 'faction_cost)))
             (if (and factioncost (> factioncost 0))
-                (concat (make-string (netrunner-card-get-value card 'factioncost) ?•) " ")
+                (concat (make-string (netrunner-card-get-value card 'faction_cost) ?•) " ")
               ""))
-          (netrunner-card-get-value card 'faction)
-          (netrunner-card-get-value card 'setname)))
+          (netrunner-card-get-value card 'faction_code)
+          (netrunner-card-get-value card 'pack_code)))
 
 (eval-after-load "org"
   '(org-add-link-type
@@ -212,10 +216,10 @@ If OMIT-TITLE, then do not include title in result string."
                                    `(title . ,arg))))
     (annotation
      (let* ((card (netrunner-filter-first netrunner-cards `(title . ,arg)))
-            (type (netrunner-card-get-value card 'type))
-            (faction (netrunner-card-get-value card 'faction))) 
-       (format " %s: %s" faction type)))
-    (post-completion 
+            (type (netrunner-card-get-value card 'type_code))
+            (faction_code (netrunner-card-get-value card 'faction_code)))
+       (format " %s: %s" faction_code type)))
+    (post-completion
      (search-backward arg)
      (replace-match
       (format "[[netrunner:%s][%s]]"
@@ -288,45 +292,45 @@ If OMIT-TITLE, then do not include title in result string."
                      (replace-regexp-in-string
                       "\n" "/" (netrunner-substitute-string text))
                    ""))))
-        (faction (concat
-                  " "
-                  (netrunner-card-get-value card 'faction)
-                  (let ((factioncost (netrunner-card-get-value card 'factioncost)))
-                    (if (and factioncost (> factioncost 0))
-                        (concat ": " (make-string (netrunner-card-get-value card 'factioncost) ?•))
-                      ""))))
+        (faction_code (concat
+                       " "
+                       (netrunner-card-get-value card 'faction_code)
+                       (let ((factioncost (netrunner-card-get-value card 'faction_cost)))
+                         (if (and factioncost (> factioncost 0))
+                             (concat ": " (make-string (netrunner-card-get-value card 'faction_cost) ?•))
+                           ""))))
         (type (concat
-               (netrunner-card-get-value card 'type)
-               (let ((subtype (netrunner-card-get-value card 'subtype)))
+               (netrunner-card-get-value card 'type_code)
+               (let ((subtype (netrunner-card-get-value card 'keywords)))
                  (if (and subtype (> (length subtype) 0))
                      (format ": %s" subtype)
                    ""))))
         (values (concat
-                 (let ((decksize (netrunner-card-get-value card 'minimumdecksize)))
+                 (let ((decksize (netrunner-card-get-value card 'minimum_deck_size)))
                    (if decksize
                        (format "%s/%s"
-                               decksize 
-                               (or (netrunner-card-get-value card 'influencelimit) "∞"))
+                               decksize
+                               (or (netrunner-card-get-value card 'influence_limit) "∞"))
                      ""))
-                 (let ((link (netrunner-card-get-value card 'baselink)))
+                 (let ((link (netrunner-card-get-value card 'base_link)))
                    (if link
                        (format " %sL" link)
                      ""))
-                 (let ((agendapoints (netrunner-card-get-value card 'agendapoints)))
+                 (let ((agendapoints (netrunner-card-get-value card 'agenda_points)))
                    (if agendapoints
                        (format "%s/%s"
-                               (netrunner-card-get-value card 'advancementcost)
+                               (netrunner-card-get-value card 'advancement_cost)
                                agendapoints)
                      ""))
                  (let ((cost (netrunner-card-get-value card 'cost)))
                    (if cost
-                       (format "%s$" cost) ""))               
-                 (let ((trash (netrunner-card-get-value card 'trash)))
+                       (format "%s$" cost) ""))
+                 (let ((trash (netrunner-card-get-value card 'trash_cost)))
                    (if trash
                        (format " %sT" trash) ""))
-                 (let ((mu (netrunner-card-get-value card 'memoryunits)))
+                 (let ((mu (netrunner-card-get-value card 'memory_cost)))
                    (if mu
-                       (format " %sMU" mu) ""))               
+                       (format " %sMU" mu) ""))
                  (let ((strength (netrunner-card-get-value card 'strength)))
                    (if strength
                        (format " Str: %s" strength) "")))))
@@ -336,7 +340,7 @@ If OMIT-TITLE, then do not include title in result string."
     (add-text-properties 0 (length text) '(face (italic shadow)) text)
     (cons (concat title "  " type " • " values
                   (when (> (length text) 0) " • ") text
-                  faction)
+                  faction_code)
           card)))
 
 (defun helm-netrunner--parse-candidates (cards)
@@ -356,14 +360,7 @@ If OMIT-TITLE, then do not include title in result string."
   (cl-loop for cand in (helm-marked-candidates)
            do
            (browse-url
-            (netrunner-card-get-value cand 'url))))
-
-(defun helm-netrunner--candidates-ancur (ignored)
-  "Browse Ancur for Helm card candidates."
-  (cl-loop for cand in (helm-marked-candidates)
-           do
-           (browse-url
-            (netrunner-card-get-value cand 'ancur_link))))
+            (format "https://netrunnerdb.com/en/card/%s" (netrunner-card-get-value cand 'code)))))
 
 (defun helm-netrunner--persistent-action (cand)
   "Show Netrunner card text in separate buffer."
@@ -387,8 +384,7 @@ If OMIT-TITLE, then do not include title in result string."
     :follow t
     :action (helm-make-actions
              "Insert" #'helm-netrunner--candidates-card-list
-             "NetrunnerDB" #'helm-netrunner--candidates-netrunnerdb
-             "Ancur" #'helm-netrunner--candidates-ancur)))
+             "NetrunnerDB" #'helm-netrunner--candidates-netrunnerdb)))
 
 ;;;###autoload
 (defun helm-netrunner ()
@@ -397,42 +393,40 @@ If OMIT-TITLE, then do not include title in result string."
   (helm
    :sources `(,(helm-source--netrunner "Corp Neutral"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Neutral")
-                                                         '(side . "Corp")))
+                                                         '(faction_code . "neutral-corp")))
               ,(helm-source--netrunner "Haas-Bioroid"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Haas-Bioroid")))
+                                                         '(faction_code . "haas-bioroid")))
               ,(helm-source--netrunner "Jinteki"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Jinteki")))
+                                                         '(faction_code . "jinteki")))
               ,(helm-source--netrunner "NBN"
-                                       (netrunner-filter netrunner-cards 
-                                                         '(faction . "NBN")))
+                                       (netrunner-filter netrunner-cards
+                                                         '(faction_code . "nbn")))
               ,(helm-source--netrunner "Weyland Consortium"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Weyland Consortium")))
+                                                         '(faction_code . "weyland-consortium")))
               ,(helm-source--netrunner "Runner Neutral"
                                        (netrunner-filter netrunner-cards
-                                                         '(side . "Runner")
-                                                         '(faction . "Neutral")))
+                                                         '(faction_code . "neutral-runner")))
               ,(helm-source--netrunner "Anarch"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Anarch")))
+                                                         '(faction_code . "anarch")))
               ,(helm-source--netrunner "Criminal"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Criminal")))
+                                                         '(faction_code . "criminal")))
               ,(helm-source--netrunner "Shaper"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Shaper")))
+                                                         '(faction_code . "shaper")))
               ,(helm-source--netrunner "Apex"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Apex")))
+                                                         '(faction_code . "apex")))
               ,(helm-source--netrunner "Sunny Lebeau"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Sunny Lebeau")))
+                                                         '(faction_code . "sunny-lebeau")))
               ,(helm-source--netrunner "Adam"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Adam"))))
+                                                         '(faction_code . "adam"))))
    :buffer "*helm netrunner*"))
 
 ;;;###autoload
@@ -442,20 +436,19 @@ If OMIT-TITLE, then do not include title in result string."
   (helm
    :sources `(,(helm-source--netrunner "Neutral"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Neutral")
-                                                         '(side . "Corp")))
+                                                         '(faction_code . "neutral-corp")))
               ,(helm-source--netrunner "Haas-Bioroid"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Haas-Bioroid")))
+                                                         '(faction_code . "haas-bioroid")))
               ,(helm-source--netrunner "Jinteki"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Jinteki")))
+                                                         '(faction_code . "jinteki")))
               ,(helm-source--netrunner "NBN"
-                                       (netrunner-filter netrunner-cards 
-                                                         '(faction . "NBN")))
+                                       (netrunner-filter netrunner-cards
+                                                         '(faction_code . "nbn")))
               ,(helm-source--netrunner "Weyland Consortium"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Weyland Consortium"))))
+                                                         '(faction_code . "weyland-consortium"))))
    :buffer "*helm netrunner*"))
 
 ;;;###autoload
@@ -465,26 +458,25 @@ If OMIT-TITLE, then do not include title in result string."
   (helm
    :sources `(,(helm-source--netrunner "Runner Neutral"
                                        (netrunner-filter netrunner-cards
-                                                         '(side . "Runner")
-                                                         '(faction . "Neutral")))
+                                                         '(faction_code . "neutral-runner")))
               ,(helm-source--netrunner "Anarch"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Anarch")))
+                                                         '(faction_code . "anarch")))
               ,(helm-source--netrunner "Criminal"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Criminal")))
+                                                         '(faction_code . "criminal")))
               ,(helm-source--netrunner "Shaper"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Shaper")))
+                                                         '(faction_code . "shaper")))
               ,(helm-source--netrunner "Apex"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Apex")))
+                                                         '(faction_code . "apex")))
               ,(helm-source--netrunner "Sunny Lebeau"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Sunny Lebeau")))
+                                                         '(faction_code . "sunny-lebeau")))
               ,(helm-source--netrunner "Adam"
                                        (netrunner-filter netrunner-cards
-                                                         '(faction . "Adam"))))
+                                                         '(faction_code . "adam"))))
    :buffer "*helm netrunner*"))
 
 (provide 'netrunner)
